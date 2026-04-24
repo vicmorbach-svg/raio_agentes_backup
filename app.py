@@ -23,10 +23,17 @@ def load_data():
     # Padroniza as colunas
     df.columns = df.columns.str.upper().str.strip()
 
-    # Limpeza de coordenadas
-    if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
-        df['LATITUDE'] = pd.to_numeric(df['LATITUDE'].astype(str).str.replace(',', '.'), errors='coerce')
-        df['LONGITUDE'] = pd.to_numeric(df['LONGITUDE'].astype(str).str.replace(',', '.'), errors='coerce')
+    def limpar_coordenadas(df):
+        if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
+            # Converte para número
+            df['LATITUDE'] = pd.to_numeric(df['LATITUDE'].astype(str).str.replace(',', '.'), errors='coerce')
+            df['LONGITUDE'] = pd.to_numeric(df['LONGITUDE'].astype(str).str.replace(',', '.'), errors='coerce')
+
+            # TRAVA DE SEGURANÇA: Transforma em vazio (NaN) qualquer coordenada fora do limite do planeta Terra
+            df.loc[(df['LATITUDE'] < -90) | (df['LATITUDE'] > 90), 'LATITUDE'] = None
+            df.loc[(df['LONGITUDE'] < -180) | (df['LONGITUDE'] > 180), 'LONGITUDE'] = None
+
+        return df
 
     # Remove linhas sem coordenadas
     df = df.dropna(subset=['LATITUDE', 'LONGITUDE'])
