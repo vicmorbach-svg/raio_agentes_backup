@@ -5,5 +5,5 @@ geopy
 streamlit-folium
 folium
 openpyxl
-geopandas
 unicodedata
+import json
