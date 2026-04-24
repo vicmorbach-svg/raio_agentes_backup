@@ -102,7 +102,7 @@ if st.session_state.cidade_selecionada == "🗺️ VISÃO GERAL (TODAS AS LOJAS)
 
     df_todas_lojas = df_lojas.dropna(subset=['LATITUDE', 'LONGITUDE']).copy()
 
-    m = folium.Map(location=[-30.0, -53.5], zoom_start=6, tiles="OpenStreetMap")
+    m = folium.Map(location=[-30.0, -53.5], zoom_start=8, tiles="OpenStreetMap")
 
     # Configuração do GeoJSON (Cores por Diretoria)
     dicionario_cores = {
