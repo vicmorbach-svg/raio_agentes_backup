@@ -3,6 +3,11 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 from geopy.distance import geodesic
+import requests
+import json
+import geopandas as gpd
+import unicodedata
+
 
 st.set_page_config(page_title="Realocação de Agentes", layout="wide")
 st.title("🔄 Realocação Inteligente de Agentes")
@@ -14,14 +19,32 @@ st.markdown("Encontre os agentes disponíveis mais próximos para cobrir a neces
 @st.cache_data
 def load_data():
     try:
-        # Carrega apenas a base principal agora
-        df = pd.read_excel("enderecos_com_coordenadas.xlsx")
+        df_lojas = pd.read_excel("enderecos_com_coordenadas.xlsx")
+        df_lotericas = pd.read_excel("lotericas_enderecos_com_coordenadas.xlsx")
+        mapa_rs = gpd.read_file("rs_municipios.geojson").to_crs(epsg=4326)
     except FileNotFoundError:
-        st.error("⚠️ Arquivo 'enderecos_com_coordenadas.xlsx' não encontrado na pasta.")
+        st.error("⚠️ Arquivos não encontrados na pasta.")
         st.stop()
 
-    # Padroniza as colunas
-    df.columns = df.columns.str.upper().str.strip()
+    # ... (Mantenha a sua limpeza de colunas e coordenadas existente aqui) ...
+    df_lojas.columns = df_lojas.columns.str.upper().str.strip()
+    # ...
+
+    # --- TRATAMENTO DE ACENTOS E PADRONIZAÇÃO ---
+    def padronizar_nomes(serie):
+        return serie.astype(str).str.upper().str.strip().str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')
+
+    df_lojas['CIDADE_TRATADA'] = padronizar_nomes(df_lojas['CIDADE'])
+    mapa_rs['name_muni_tratado'] = padronizar_nomes(mapa_rs['name_muni'])
+
+    # Cruzamento do mapa com as diretorias
+    df_mapa = df_lojas[['CIDADE_TRATADA', 'DIRETORIA']].drop_duplicates(subset=['CIDADE_TRATADA'])
+    mapa_diretorias = mapa_rs.merge(df_mapa, how="left", left_on="name_muni_tratado", right_on="CIDADE_TRATADA")
+    mapa_diretorias['DIRETORIA'] = mapa_diretorias['DIRETORIA'].fillna('Sem Diretoria')
+
+    return df_lojas, df_lotericas, mapa_diretorias
+
+df_lojas, df_lotericas, mapa_diretorias = load_data()
 
     def limpar_coordenadas(df):
         if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
@@ -88,7 +111,41 @@ if st.session_state.cidade_selecionada == "🗺️ VISÃO GERAL (TODAS AS LOJAS)
     df_todas_lojas = df_lojas.dropna(subset=['LATITUDE', 'LONGITUDE']).copy()
     col_nome_loja = 'ENDERECO' if 'ENDERECO' in df_todas_lojas.columns else df_todas_lojas.columns[0]
 
+        # Adicione este bloco antes de renderizar o mapa da "VISÃO GERAL"
+    st.subheader("📊 Resumo de Agentes por Diretoria")
+    
+    # Filtra apenas quem tem agente e conta por diretoria
+    df_agentes_ativos = df_lojas[df_lojas['AGENTE_DISPONIVEL'] == 'SIM']
+    contagem_diretoria = df_agentes_ativos.groupby('DIRETORIA').size().reset_index(name='Agentes Disponíveis')
+    
+    # Exibe os dados em colunas para ficar visualmente agradável
+    cols = st.columns(len(contagem_diretoria))
+    for i, row in contagem_diretoria.iterrows():
+        with cols[i]:
+            st.metric(label=row['DIRETORIA'], value=row['Agentes Disponíveis'])
+    
     m = folium.Map(location=[-30.0, -53.5], zoom_start=6, tiles="OpenStreetMap")
+        # CORES FIXAS DAS REGIONAIS
+    dicionario_cores = {
+        'CENTRAL': '#F8DC00',
+        'LESTE': '#17E3CB',
+        'NORTE': '#FE952B',
+        'OESTE': '#0027BD',
+        'SUL': '#A11FFF',
+        'Sem Diretoria': '#cccccc' # Cinza para cidades sem loja
+    }
+
+    # Adiciona os polígonos coloridos ao mapa
+    folium.GeoJson(
+        mapa_diretorias,
+        style_function=lambda feature: {
+            'fillColor': dicionario_cores.get(feature['properties']['DIRETORIA'], '#cccccc'),
+            'color': 'black',
+            'weight': 0.5,
+            'fillOpacity': 0.6,
+        },
+        tooltip=folium.GeoJsonTooltip(fields=['name_muni', 'DIRETORIA'], aliases=['Cidade:', 'Diretoria:'])
+    ).add_to(m)
 
     for idx, row in df_todas_lojas.iterrows():
         # Verifica se a coluna AGENTE_DISPONIVEL está marcada como SIM
@@ -163,9 +220,23 @@ else:
     df_agentes = df_lojas[df_lojas['AGENTE_DISPONIVEL'].astype(str).str.upper().str.strip() == 'SIM'].copy()
 
     # Calcula a distância da loja para todos os agentes
-    def calcular_distancia(row):
-        coord_agente = (row['LATITUDE'], row['LONGITUDE'])
-        return geodesic(coord_loja, coord_agente).kilometers
+    def calcular_rota_real(coord_origem, coord_destino):
+    # A API do OSRM exige o formato: longitude,latitude
+    url = f"http://router.project-osrm.org/route/v1/driving/{coord_origem[1]},{coord_origem[0]};{coord_destino[1]},{coord_destino[0]}?overview=false"
+
+    try:
+        resposta = requests.get(url)
+        dados = resposta.json()
+
+        if dados.get('code') == 'Ok':
+            distancia_km = dados['routes'][0]['distance'] / 1000
+            tempo_minutos = dados['routes'][0]['duration'] / 60
+            return distancia_km, tempo_minutos
+    except Exception as e:
+        print(f"Erro na API de rotas: {e}")
+
+    # Retorna vazio se a API falhar
+    return None, None
 
     if not df_agentes.empty:
         df_agentes['DISTANCIA_KM'] = df_agentes.apply(calcular_distancia, axis=1)
