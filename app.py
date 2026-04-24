@@ -4,7 +4,6 @@ import folium
 from streamlit_folium import st_folium
 from geopy.distance import geodesic
 import requests
-import geopandas as gpd
 import unicodedata
 
 st.set_page_config(page_title="Realocação de Agentes", layout="wide")
@@ -18,7 +17,9 @@ st.markdown("Encontre os agentes disponíveis mais próximos para cobrir a neces
 def load_data():
     try:
         df_lojas = pd.read_excel("enderecos_com_coordenadas.xlsx")
-        mapa_rs = gpd.read_file("rs_municipios.geojson").to_crs(epsg=4326)
+        # Carrega o GeoJSON com a biblioteca padrão do Python
+        with open("rs_municipios.geojson", "r", encoding="utf-8") as f:
+            geojson_rs = json.load(f)
     except FileNotFoundError:
         st.error("⚠️ Arquivos não encontrados na pasta. Verifique o Excel e o GeoJSON.")
         st.stop()
@@ -29,36 +30,32 @@ def load_data():
     if 'LATITUDE' in df_lojas.columns and 'LONGITUDE' in df_lojas.columns:
         df_lojas['LATITUDE'] = pd.to_numeric(df_lojas['LATITUDE'].astype(str).str.replace(',', '.'), errors='coerce')
         df_lojas['LONGITUDE'] = pd.to_numeric(df_lojas['LONGITUDE'].astype(str).str.replace(',', '.'), errors='coerce')
-        # Trava de segurança para coordenadas inválidas
         df_lojas.loc[(df_lojas['LATITUDE'] < -90) | (df_lojas['LATITUDE'] > 90), 'LATITUDE'] = None
         df_lojas.loc[(df_lojas['LONGITUDE'] < -180) | (df_lojas['LONGITUDE'] > 180), 'LONGITUDE'] = None
 
     df_lojas = df_lojas.dropna(subset=['LATITUDE', 'LONGITUDE'])
     df_lojas['CIDADE'] = df_lojas['CIDADE'].astype(str).str.upper().str.strip()
 
-    # Garante colunas de agentes
     if 'AGENTE_DISPONIVEL' not in df_lojas.columns:
         df_lojas['AGENTE_DISPONIVEL'] = 'NAO'
     if 'NOME_AGENTE' not in df_lojas.columns:
         df_lojas['NOME_AGENTE'] = 'Não Informado'
 
-    # --- TRATAMENTO DE ACENTOS E PADRONIZAÇÃO PARA O MAPA ---
+    # --- TRATAMENTO DE ACENTOS ---
     def padronizar_nomes(serie):
         return serie.astype(str).str.upper().str.strip().str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')
 
     df_lojas['CIDADE_TRATADA'] = padronizar_nomes(df_lojas['CIDADE'])
-    mapa_rs['name_muni_tratado'] = padronizar_nomes(mapa_rs['name_muni'])
 
-    # Cruzamento do mapa com as diretorias
+    # Cria um dicionário rápido para consultar a diretoria pela cidade
     if 'DIRETORIA' in df_lojas.columns:
-        df_mapa = df_lojas[['CIDADE_TRATADA', 'DIRETORIA']].drop_duplicates(subset=['CIDADE_TRATADA'])
-        mapa_diretorias = mapa_rs.merge(df_mapa, how="left", left_on="name_muni_tratado", right_on="CIDADE_TRATADA")
-        mapa_diretorias['DIRETORIA'] = mapa_diretorias['DIRETORIA'].fillna('Sem Diretoria')
+        dict_diretorias = dict(zip(df_lojas['CIDADE_TRATADA'], df_lojas['DIRETORIA']))
     else:
-        mapa_diretorias = mapa_rs
-        mapa_diretorias['DIRETORIA'] = 'Sem Diretoria'
+        dict_diretorias = {}
 
-    return df_lojas, mapa_diretorias
+    return df_lojas, geojson_rs, dict_diretorias
+
+df_lojas, geojson_rs, dict_diretorias = load_data()
 
 df_lojas, mapa_diretorias = load_data()
 
@@ -93,7 +90,7 @@ if st.session_state.cidade_selecionada == "🗺️ VISÃO GERAL (TODAS AS LOJAS)
     col_nome_loja = 'ENDERECO' if 'ENDERECO' in df_lojas.columns else df_lojas.columns[0]
     m = folium.Map(location=[-30.0, -53.5], zoom_start=6, tiles="OpenStreetMap")
 
-    # CORES FIXAS DAS REGIONAIS
+        # CORES FIXAS DAS REGIONAIS
     dicionario_cores = {
         'CENTRAL': '#F8DC00',
         'LESTE': '#17E3CB',
@@ -103,16 +100,24 @@ if st.session_state.cidade_selecionada == "🗺️ VISÃO GERAL (TODAS AS LOJAS)
         'Sem Diretoria': '#cccccc'
     }
 
-    # Adiciona os polígonos coloridos ao mapa
+    # Função para remover acentos do nome que vem do GeoJSON na hora de pintar
+    def limpar_nome_geojson(nome):
+        import unicodedata
+        return unicodedata.normalize('NFKD', str(nome).upper().strip()).encode('ascii', 'ignore').decode('utf-8')
+
+    # Adiciona os polígonos coloridos ao mapa sem usar geopandas
     folium.GeoJson(
-        mapa_diretorias,
+        geojson_rs,
         style_function=lambda feature: {
-            'fillColor': dicionario_cores.get(feature['properties'].get('DIRETORIA', 'Sem Diretoria'), '#cccccc'),
+            # Pega o nome da cidade no GeoJSON, limpa, busca no dicionário e aplica a cor
+            'fillColor': dicionario_cores.get(
+                dict_diretorias.get(limpar_nome_geojson(feature['properties']['name_muni']), 'Sem Diretoria'), 
+                '#cccccc'
+            ),
             'color': 'black',
             'weight': 0.5,
-            'fillOpacity': 0.5,
-        },
-        tooltip=folium.GeoJsonTooltip(fields=['name_muni', 'DIRETORIA'], aliases=['Cidade:', 'Diretoria:'])
+            'fillOpacity': 0.6,
+        }
     ).add_to(m)
 
     # Adiciona os pins das lojas
