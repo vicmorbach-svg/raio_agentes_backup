@@ -83,7 +83,7 @@ with col1:
 # LÓGICA 1: VISÃO GERAL DO ESTADO (FOLIUM)
 # ==========================================
 if st.session_state.cidade_selecionada == "🗺️ VISÃO GERAL (TODAS AS LOJAS)":
-    st.info("📍 Clique em qualquer marcador azul no mapa para ir direto para a análise de raio daquela loja.")
+    st.info("📍 Clique em qualquer marcador no mapa para ir direto para a análise de raio daquela loja. Pinos verdes indicam agentes disponíveis.")
 
     df_todas_lojas = df_lojas.dropna(subset=['LATITUDE', 'LONGITUDE']).copy()
     col_nome_loja = 'ENDERECO' if 'ENDERECO' in df_todas_lojas.columns else df_todas_lojas.columns[0]
@@ -91,10 +91,23 @@ if st.session_state.cidade_selecionada == "🗺️ VISÃO GERAL (TODAS AS LOJAS)
     m = folium.Map(location=[-30.0, -53.5], zoom_start=6, tiles="OpenStreetMap")
 
     for idx, row in df_todas_lojas.iterrows():
+        # Verifica se a coluna AGENTE_DISPONIVEL está marcada como SIM
+        tem_agente = str(row.get('AGENTE_DISPONIVEL', '')).strip().upper() == 'SIM'
+
+        # Define a cor, ícone e texto com base na disponibilidade
+        if tem_agente:
+            cor_pino = "green"
+            icone_pino = "user"
+            texto_tooltip = f"✅ {row[col_nome_loja]} (COM AGENTE) - Clique para analisar"
+        else:
+            cor_pino = "blue"
+            icone_pino = "info-sign"
+            texto_tooltip = f"🏢 {row[col_nome_loja]} - Clique para analisar"
+
         folium.Marker(
             location=[row['LATITUDE'], row['LONGITUDE']],
-            tooltip=f"Loja: {row[col_nome_loja]} (Clique para analisar)",
-            icon=folium.Icon(color="blue", icon="info-sign")
+            tooltip=texto_tooltip,
+            icon=folium.Icon(color=cor_pino, icon=icone_pino)
         ).add_to(m)
 
     # 🚨 CAPTURA O CLIQUE NO MAPA
