@@ -170,7 +170,7 @@ else:
         st.session_state.loja_selecionada = loja_selecionada
 
     with col3:
-        raio_km = st.slider("3️⃣ Defina o Raio de Busca (em KM):", min_value=0.5, max_value=50.0, value=10.0, step=0.5)
+        raio_km = st.slider("3️⃣ Defina o Raio de Busca (em KM):", min_value=20.0, max_value=150.0, value=50.0, step=5.0)
 
     if st.button("⬅️ Voltar para Visão Geral"):
         st.session_state.cidade_selecionada = "🗺️ VISÃO GERAL (TODAS AS LOJAS)"
