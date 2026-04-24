@@ -16,64 +16,64 @@ st.markdown("Encontre os agentes disponíveis mais próximos para cobrir a neces
 # ==========================================
 # 1. CARREGAMENTO E LIMPEZA DOS DADOS
 # ==========================================
-    @st.cache_data
-    def load_data():
-        try:
-            df_lojas = pd.read_excel("enderecos_com_coordenadas.xlsx")
-            df_lotericas = pd.read_excel("lotericas_enderecos_com_coordenadas.xlsx")
-            mapa_rs = gpd.read_file("rs_municipios.geojson").to_crs(epsg=4326)
-        except FileNotFoundError:
-            st.error("⚠️ Arquivos não encontrados na pasta.")
-            st.stop()
-    
-        # ... (Mantenha a sua limpeza de colunas e coordenadas existente aqui) ...
-        df_lojas.columns = df_lojas.columns.str.upper().str.strip()
-        # ...
-    
-        # --- TRATAMENTO DE ACENTOS E PADRONIZAÇÃO ---
-        def padronizar_nomes(serie):
-            return serie.astype(str).str.upper().str.strip().str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')
-    
-        df_lojas['CIDADE_TRATADA'] = padronizar_nomes(df_lojas['CIDADE'])
-        mapa_rs['name_muni_tratado'] = padronizar_nomes(mapa_rs['name_muni'])
-    
-        # Cruzamento do mapa com as diretorias
-        df_mapa = df_lojas[['CIDADE_TRATADA', 'DIRETORIA']].drop_duplicates(subset=['CIDADE_TRATADA'])
-        mapa_diretorias = mapa_rs.merge(df_mapa, how="left", left_on="name_muni_tratado", right_on="CIDADE_TRATADA")
-        mapa_diretorias['DIRETORIA'] = mapa_diretorias['DIRETORIA'].fillna('Sem Diretoria')
-    
-        return df_lojas, df_lotericas, mapa_diretorias
-    
-    df_lojas, df_lotericas, mapa_diretorias = load_data()
-
-    def limpar_coordenadas(df):
-        if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
-            # Converte para número
-            df['LATITUDE'] = pd.to_numeric(df['LATITUDE'].astype(str).str.replace(',', '.'), errors='coerce')
-            df['LONGITUDE'] = pd.to_numeric(df['LONGITUDE'].astype(str).str.replace(',', '.'), errors='coerce')
-
-            # TRAVA DE SEGURANÇA: Transforma em vazio (NaN) qualquer coordenada fora do limite do planeta Terra
-            df.loc[(df['LATITUDE'] < -90) | (df['LATITUDE'] > 90), 'LATITUDE'] = None
-            df.loc[(df['LONGITUDE'] < -180) | (df['LONGITUDE'] > 180), 'LONGITUDE'] = None
-
-        return df
-
-    # Remove linhas sem coordenadas
-    df = df.dropna(subset=['LATITUDE', 'LONGITUDE'])
-
-    if 'CIDADE' in df.columns:
-        df['CIDADE'] = df['CIDADE'].astype(str).str.upper().str.strip()
-    else:
-        st.error("⚠️ A coluna 'CIDADE' não foi encontrada na planilha.")
+@st.cache_data
+def load_data():
+    try:
+        df_lojas = pd.read_excel("enderecos_com_coordenadas.xlsx")
+        df_lotericas = pd.read_excel("lotericas_enderecos_com_coordenadas.xlsx")
+        mapa_rs = gpd.read_file("rs_municipios.geojson").to_crs(epsg=4326)
+    except FileNotFoundError:
+        st.error("⚠️ Arquivos não encontrados na pasta.")
         st.stop()
+    
+    # ... (Mantenha a sua limpeza de colunas e coordenadas existente aqui) ...
+    df_lojas.columns = df_lojas.columns.str.upper().str.strip()
+    # ...
+    
+    # --- TRATAMENTO DE ACENTOS E PADRONIZAÇÃO ---
+    def padronizar_nomes(serie):
+        return serie.astype(str).str.upper().str.strip().str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')
+    
+    df_lojas['CIDADE_TRATADA'] = padronizar_nomes(df_lojas['CIDADE'])
+    mapa_rs['name_muni_tratado'] = padronizar_nomes(mapa_rs['name_muni'])
+    
+    # Cruzamento do mapa com as diretorias
+    df_mapa = df_lojas[['CIDADE_TRATADA', 'DIRETORIA']].drop_duplicates(subset=['CIDADE_TRATADA'])
+    mapa_diretorias = mapa_rs.merge(df_mapa, how="left", left_on="name_muni_tratado", right_on="CIDADE_TRATADA")
+    mapa_diretorias['DIRETORIA'] = mapa_diretorias['DIRETORIA'].fillna('Sem Diretoria')
+    
+    return df_lojas, df_lotericas, mapa_diretorias
+    
+df_lojas, df_lotericas, mapa_diretorias = load_data()
 
-    # Garante que as novas colunas existam para evitar erros
-    if 'AGENTE_DISPONIVEL' not in df.columns:
-        df['AGENTE_DISPONIVEL'] = 'NAO'
-    if 'NOME_AGENTE' not in df.columns:
-        df['NOME_AGENTE'] = 'Não Informado'
+def limpar_coordenadas(df):
+    if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
+        # Converte para número
+        df['LATITUDE'] = pd.to_numeric(df['LATITUDE'].astype(str).str.replace(',', '.'), errors='coerce')
+        df['LONGITUDE'] = pd.to_numeric(df['LONGITUDE'].astype(str).str.replace(',', '.'), errors='coerce')
+
+        # TRAVA DE SEGURANÇA: Transforma em vazio (NaN) qualquer coordenada fora do limite do planeta Terra
+        df.loc[(df['LATITUDE'] < -90) | (df['LATITUDE'] > 90), 'LATITUDE'] = None
+        df.loc[(df['LONGITUDE'] < -180) | (df['LONGITUDE'] > 180), 'LONGITUDE'] = None
 
     return df
+
+# Remove linhas sem coordenadas
+df = df.dropna(subset=['LATITUDE', 'LONGITUDE'])
+
+if 'CIDADE' in df.columns:
+    df['CIDADE'] = df['CIDADE'].astype(str).str.upper().str.strip()
+else:
+    st.error("⚠️ A coluna 'CIDADE' não foi encontrada na planilha.")
+    st.stop()
+
+# Garante que as novas colunas existam para evitar erros
+if 'AGENTE_DISPONIVEL' not in df.columns:
+    df['AGENTE_DISPONIVEL'] = 'NAO'
+if 'NOME_AGENTE' not in df.columns:
+    df['NOME_AGENTE'] = 'Não Informado'
+
+return df
 
 df_lojas = load_data()
 
