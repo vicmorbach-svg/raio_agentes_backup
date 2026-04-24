@@ -5,5 +5,4 @@ geopy
 streamlit-folium
 folium
 openpyxl
-unicodedata
 import json
