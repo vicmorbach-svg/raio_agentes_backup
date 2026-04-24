@@ -220,9 +220,9 @@ else:
     df_agentes = df_lojas[df_lojas['AGENTE_DISPONIVEL'].astype(str).str.upper().str.strip() == 'SIM'].copy()
 
     # Calcula a distância da loja para todos os agentes
-    def calcular_rota_real(coord_origem, coord_destino):
-    # A API do OSRM exige o formato: longitude,latitude
-    url = f"http://router.project-osrm.org/route/v1/driving/{coord_origem[1]},{coord_origem[0]};{coord_destino[1]},{coord_destino[0]}?overview=false"
+def calcular_rota_real(coord_origem, coord_destino):
+# A API do OSRM exige o formato: longitude,latitude
+url = f"http://router.project-osrm.org/route/v1/driving/{coord_origem[1]},{coord_origem[0]};{coord_destino[1]},{coord_destino[0]}?overview=false"
 
     try:
         resposta = requests.get(url)
