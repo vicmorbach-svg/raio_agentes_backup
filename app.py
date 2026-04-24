@@ -9,87 +9,82 @@ import unicodedata
 
 st.set_page_config(page_title="Realocação de Agentes", layout="wide")
 st.title("🔄 Realocação Inteligente de Agentes")
-st.markdown("Encontre os agentes disponíveis mais próximos considerando o tempo real de deslocamento.")
+st.markdown("Encontre os agentes disponíveis mais próximos para cobrir a necessidade da sua loja, considerando o tempo real de deslocamento.")
 
 # ==========================================
-# 1. CARREGAMENTO E LIMPEZA DOS DADOS
+# 1. FUNÇÕES DE DADOS E ROTAS
 # ==========================================
 @st.cache_data
 def load_data():
     try:
-        # Carrega a planilha única
-        df = pd.read_excel("enderecos_com_coordenadas.xlsx")
-
-        # Carrega o GeoJSON nativamente (sem geopandas)
+        df_lojas = pd.read_excel("enderecos_com_coordenadas.xlsx")
         with open("rs_municipios.geojson", "r", encoding="utf-8") as f:
             geojson_rs = json.load(f)
-
     except FileNotFoundError:
-        st.error("⚠️ Arquivos não encontrados. Verifique se 'enderecos_com_coordenadas.xlsx' e 'rs_municipios.geojson' estão na pasta.")
+        st.error("⚠️ Arquivos não encontrados na pasta. Verifique o Excel e o GeoJSON.")
         st.stop()
 
-    df.columns = df.columns.str.upper().str.strip()
+    df_lojas.columns = df_lojas.columns.str.upper().str.strip()
 
     # Limpeza de Coordenadas
-    if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
-        df['LATITUDE'] = pd.to_numeric(df['LATITUDE'].astype(str).str.replace(',', '.'), errors='coerce')
-        df['LONGITUDE'] = pd.to_numeric(df['LONGITUDE'].astype(str).str.replace(',', '.'), errors='coerce')
-        # Trava de segurança para coordenadas inválidas
-        df.loc[(df['LATITUDE'] < -90) | (df['LATITUDE'] > 90), 'LATITUDE'] = None
-        df.loc[(df['LONGITUDE'] < -180) | (df['LONGITUDE'] > 180), 'LONGITUDE'] = None
+    if 'LATITUDE' in df_lojas.columns and 'LONGITUDE' in df_lojas.columns:
+        df_lojas['LATITUDE'] = pd.to_numeric(df_lojas['LATITUDE'].astype(str).str.replace(',', '.'), errors='coerce')
+        df_lojas['LONGITUDE'] = pd.to_numeric(df_lojas['LONGITUDE'].astype(str).str.replace(',', '.'), errors='coerce')
+        df_lojas.loc[(df_lojas['LATITUDE'] < -90) | (df_lojas['LATITUDE'] > 90), 'LATITUDE'] = None
+        df_lojas.loc[(df_lojas['LONGITUDE'] < -180) | (df_lojas['LONGITUDE'] > 180), 'LONGITUDE'] = None
 
-    df = df.dropna(subset=['LATITUDE', 'LONGITUDE'])
+    df_lojas['CIDADE'] = df_lojas['CIDADE'].astype(str).str.upper().str.strip()
 
-    # Cria dicionário de diretorias para pintar o mapa
-    dict_diretorias = {}
-    if 'CIDADE' in df.columns and 'DIRETORIA' in df.columns:
-        for _, row in df.iterrows():
-            # Limpa acentos para garantir que o nome cruze perfeitamente com o GeoJSON
-            cidade_limpa = unicodedata.normalize('NFKD', str(row['CIDADE']).upper().strip()).encode('ascii', 'ignore').decode('utf-8')
-            dict_diretorias[cidade_limpa] = row['DIRETORIA']
+    # Separa os agentes disponíveis
+    if 'AGENTE_DISPONIVEL' in df_lojas.columns:
+        df_agentes = df_lojas[df_lojas['AGENTE_DISPONIVEL'].astype(str).str.upper().str.strip() == 'SIM'].copy()
+    else:
+        df_agentes = pd.DataFrame()
 
-    return df, geojson_rs, dict_diretorias
+    return df_lojas, df_agentes, geojson_rs
 
-# Desempacota corretamente as 3 variáveis
-df_lojas, geojson_rs, dict_diretorias = load_data()
-
-# Separa quem é agente disponível
-if 'AGENTE_DISPONIVEL' in df_lojas.columns:
-    df_agentes = df_lojas[df_lojas['AGENTE_DISPONIVEL'] == 'SIM'].copy()
-else:
-    df_agentes = pd.DataFrame()
-
-# ==========================================
-# 2. FUNÇÃO DE ROTA (OSRM)
-# ==========================================
 def calcular_rota_real(origem, destino):
-    url = f"http://router.project-osrm.org/route/v1/driving/{origem[1]},{origem[0]};{destino[1]},{destino[0]}?overview=false"
     try:
+        url = f"http://router.project-osrm.org/route/v1/driving/{origem[1]},{origem[0]};{destino[1]},{destino[0]}?overview=false"
         resposta = requests.get(url, timeout=5)
-        if resposta.status_code == 200:
-            dados = resposta.json()
-            if dados['code'] == 'Ok':
-                distancia_km = dados['routes'][0]['distance'] / 1000
-                tempo_min = dados['routes'][0]['duration'] / 60
-                return distancia_km, tempo_min
+        dados = resposta.json()
+        if dados.get("code") == "Ok":
+            distancia_km = dados["routes"][0]["distance"] / 1000
+            tempo_min = dados["routes"][0]["duration"] / 60
+            return distancia_km, tempo_min
     except:
         pass
-    # Se a API falhar, retorna a distância em linha reta e um tempo estimado (60km/h)
-    dist_reta = geodesic(origem, destino).kilometers
-    return dist_reta, (dist_reta / 60) * 60
+    return geodesic(origem, destino).kilometers, geodesic(origem, destino).kilometers * 1.2
+
+df_lojas, df_agentes, geojson_rs = load_data()
+col_nome_loja = 'ENDERECO' if 'ENDERECO' in df_lojas.columns else df_lojas.columns[0]
 
 # ==========================================
-# 3. INTERFACE E MEMÓRIA (SESSION STATE)
+# 2. FILTRO DE ENDEREÇOS VÁLIDOS PARA O MENU
+# ==========================================
+# Remove linhas onde o endereço é vazio, nulo ou "nan"
+mascara_endereco_valido = df_lojas[col_nome_loja].notna() & \
+                          (df_lojas[col_nome_loja].astype(str).str.strip() != '') & \
+                          (df_lojas[col_nome_loja].astype(str).str.lower() != 'nan')
+
+df_lojas_com_endereco = df_lojas[mascara_endereco_valido]
+
+# ==========================================
+# 3. CONTROLE DE ESTADO (SESSION STATE)
 # ==========================================
 if 'cidade_selecionada' not in st.session_state:
     st.session_state.cidade_selecionada = "🗺️ VISÃO GERAL (TODAS AS LOJAS)"
 if 'loja_selecionada' not in st.session_state:
     st.session_state.loja_selecionada = None
 
+# ==========================================
+# 4. INTERFACE DE SELEÇÃO
+# ==========================================
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    cidades_disponiveis = ["🗺️ VISÃO GERAL (TODAS AS LOJAS)"] + sorted(df_lojas['CIDADE'].unique())
+    # Usa apenas as cidades que têm pelo menos uma loja com endereço válido
+    cidades_disponiveis = ["🗺️ VISÃO GERAL (TODAS AS LOJAS)"] + sorted(df_lojas_com_endereco['CIDADE'].unique())
     index_cidade = cidades_disponiveis.index(st.session_state.cidade_selecionada) if st.session_state.cidade_selecionada in cidades_disponiveis else 0
 
     cidade_selecionada = st.selectbox("1️⃣ Escolha a Cidade:", cidades_disponiveis, index=index_cidade)
@@ -103,66 +98,76 @@ with col1:
 # LÓGICA 1: VISÃO GERAL DO ESTADO
 # ==========================================
 if st.session_state.cidade_selecionada == "🗺️ VISÃO GERAL (TODAS AS LOJAS)":
-    st.info("📍 Clique em qualquer marcador no mapa para ir direto para a análise de raio daquela loja.")
+    st.info("📍 Clique em qualquer marcador azul no mapa para ir direto para a análise de raio daquela loja.")
+
+    df_todas_lojas = df_lojas.dropna(subset=['LATITUDE', 'LONGITUDE']).copy()
 
     m = folium.Map(location=[-30.0, -53.5], zoom_start=6, tiles="OpenStreetMap")
 
-    # Cores das Diretorias
-    cores_dir = {
+    # Configuração do GeoJSON (Cores por Diretoria)
+    dicionario_cores = {
         'CENTRAL': '#F8DC00', 'LESTE': '#17E3CB', 'NORTE': '#FE952B',
         'OESTE': '#0027BD', 'SUL': '#A11FFF', 'Sem Diretoria': '#cccccc'
     }
+
+    dict_diretorias = dict(zip(df_lojas['CIDADE'], df_lojas['DIRETORIA'].fillna('Sem Diretoria')))
 
     def limpar_nome_geojson(nome):
         if pd.isna(nome) or not nome: return "SEM CIDADE"
         return unicodedata.normalize('NFKD', str(nome).upper().strip()).encode('ascii', 'ignore').decode('utf-8')
 
-    # Adiciona o GeoJSON colorido
     folium.GeoJson(
         geojson_rs,
         style_function=lambda feature: {
-            'fillColor': cores_dir.get(dict_diretorias.get(limpar_nome_geojson(feature['properties'].get('name_muni')), 'Sem Diretoria'), '#cccccc'),
-            'color': 'black', 'weight': 0.5, 'fillOpacity': 0.5,
+            'fillColor': dicionario_cores.get(dict_diretorias.get(limpar_nome_geojson(feature['properties'].get('name_muni')), 'Sem Diretoria'), '#cccccc'),
+            'color': 'black', 'weight': 0.5, 'fillOpacity': 0.6,
         }
     ).add_to(m)
 
-    col_nome_loja = 'ENDERECO' if 'ENDERECO' in df_lojas.columns else df_lojas.columns[0]
-
-    # Adiciona os marcadores
-    for idx, row in df_lojas.iterrows():
-        tem_agente = row.get('AGENTE_DISPONIVEL', 'NAO') == 'SIM'
-        cor_pino = "green" if tem_agente else "blue"
-        icone_pino = "user" if tem_agente else "info-sign"
-        texto = f"👤 Agente Disponível: {row.get('NOME_AGENTE', '')}" if tem_agente else f"🏢 Loja: {row[col_nome_loja]}"
+    # Adiciona os Pins (Laranja para sem endereço, Azul para com endereço)
+    for idx, row in df_todas_lojas.iterrows():
+        endereco_vazio = pd.isna(row[col_nome_loja]) or str(row[col_nome_loja]).strip() == '' or str(row[col_nome_loja]).lower() == 'nan'
+        cor_pino = "orange" if endereco_vazio else "blue"
+        texto_tooltip = f"📍 {row['CIDADE']} (Sem endereço)" if endereco_vazio else f"🏢 Loja: {row[col_nome_loja]}"
 
         folium.Marker(
             location=[row['LATITUDE'], row['LONGITUDE']],
-            tooltip=f"{texto} (Clique para analisar)",
-            icon=folium.Icon(color=cor_pino, icon=icone_pino)
+            tooltip=texto_tooltip,
+            icon=folium.Icon(color=cor_pino, icon="info-sign")
         ).add_to(m)
 
     mapa_geral = st_folium(m, use_container_width=True, height=600, returned_objects=["last_object_clicked"])
 
-    # Captura o clique
+    # Captura clique no mapa
     if mapa_geral and mapa_geral.get("last_object_clicked"):
-        lat_c, lng_c = mapa_geral["last_object_clicked"]["lat"], mapa_geral["last_object_clicked"]["lng"]
-        df_lojas['LAT_R'] = df_lojas['LATITUDE'].round(4)
-        df_lojas['LNG_R'] = df_lojas['LONGITUDE'].round(4)
+        lat_clicada = mapa_geral["last_object_clicked"]["lat"]
+        lng_clicada = mapa_geral["last_object_clicked"]["lng"]
 
-        loja_clicada = df_lojas[(df_lojas['LAT_R'] == round(lat_c, 4)) & (df_lojas['LNG_R'] == round(lng_c, 4))]
+        df_todas_lojas['LAT_ROUND'] = df_todas_lojas['LATITUDE'].round(4)
+        df_todas_lojas['LNG_ROUND'] = df_todas_lojas['LONGITUDE'].round(4)
+
+        loja_clicada = df_todas_lojas[
+            (df_todas_lojas['LAT_ROUND'] == round(lat_clicada, 4)) & 
+            (df_todas_lojas['LNG_ROUND'] == round(lng_clicada, 4))
+        ]
 
         if not loja_clicada.empty:
-            st.session_state.cidade_selecionada = loja_clicada.iloc[0]['CIDADE']
-            st.session_state.loja_selecionada = loja_clicada.iloc[0][col_nome_loja]
-            st.rerun()
+            # Só redireciona se a loja clicada tiver endereço válido
+            end_clicado = loja_clicada.iloc[0][col_nome_loja]
+            if pd.notna(end_clicado) and str(end_clicado).strip() != '' and str(end_clicado).lower() != 'nan':
+                st.session_state.cidade_selecionada = loja_clicada.iloc[0]['CIDADE']
+                st.session_state.loja_selecionada = end_clicado
+                st.rerun()
+            else:
+                st.warning("⚠️ Este ponto não possui um endereço válido para análise de raio.")
 
 # ==========================================
 # LÓGICA 2: ANÁLISE DE RAIO
 # ==========================================
 else:
     with col2:
-        lojas_da_cidade = df_lojas[df_lojas['CIDADE'] == st.session_state.cidade_selecionada]
-        col_nome_loja = 'ENDERECO' if 'ENDERECO' in lojas_da_cidade.columns else lojas_da_cidade.columns[0]
+        # Filtra as lojas da cidade selecionada APENAS com endereços válidos
+        lojas_da_cidade = df_lojas_com_endereco[df_lojas_com_endereco['CIDADE'] == st.session_state.cidade_selecionada]
         lista_lojas = lojas_da_cidade[col_nome_loja].tolist()
 
         index_loja = lista_lojas.index(st.session_state.loja_selecionada) if st.session_state.loja_selecionada in lista_lojas else 0
