@@ -124,16 +124,28 @@ if st.session_state.cidade_selecionada == "🗺️ VISÃO GERAL (TODAS AS LOJAS)
         }
     ).add_to(m)
 
-    # Adiciona os Pins (Laranja para sem endereço, Azul para com endereço)
+        # Adiciona os pins para todas as lojas/agentes
     for idx, row in df_todas_lojas.iterrows():
         endereco_vazio = pd.isna(row[col_nome_loja]) or str(row[col_nome_loja]).strip() == '' or str(row[col_nome_loja]).lower() == 'nan'
-        cor_pino = "orange" if endereco_vazio else "blue"
-        texto_tooltip = f"📍 {row['CIDADE']} (Sem endereço)" if endereco_vazio else f"🏢 Loja: {row[col_nome_loja]}"
+        tem_agente = str(row.get('AGENTE_DISPONIVEL', '')).strip().upper() == 'SIM'
+
+        if endereco_vazio:
+            cor_pino = "orange"
+            icone_pino = "user"
+            texto_tooltip = f"📍 Apenas Agente: {row['CIDADE']}"
+        elif tem_agente:
+            cor_pino = "green"
+            icone_pino = "star"
+            texto_tooltip = f"✅ Loja com Agente: {row[col_nome_loja]} ({row['CIDADE']})"
+        else:
+            cor_pino = "blue"
+            icone_pino = "info-sign"
+            texto_tooltip = f"🏢 Apenas Loja: {row[col_nome_loja]} ({row['CIDADE']})"
 
         folium.Marker(
             location=[row['LATITUDE'], row['LONGITUDE']],
             tooltip=texto_tooltip,
-            icon=folium.Icon(color=cor_pino, icon="info-sign")
+            icon=folium.Icon(color=cor_pino, icon=icone_pino)
         ).add_to(m)
 
     mapa_geral = st_folium(m, use_container_width=True, height=600, returned_objects=["last_object_clicked"])
@@ -207,10 +219,25 @@ else:
         color="#0055FF", fill=True, fill_opacity=0.15, tooltip=f"Raio de {raio_km}km"
     ).add_to(m)
 
+        # Verifica o status da loja de destino
+    endereco_vazio = pd.isna(dados_loja[col_nome_loja]) or str(dados_loja[col_nome_loja]).strip() == '' or str(dados_loja[col_nome_loja]).lower() == 'nan'
+    tem_agente = str(dados_loja.get('AGENTE_DISPONIVEL', '')).strip().upper() == 'SIM'
+
+    if endereco_vazio:
+        cor_pino_destino = "orange"
+        texto_destino = f"📍 DESTINO: {dados_loja['CIDADE']} (Apenas Agente)"
+    elif tem_agente:
+        cor_pino_destino = "green"
+        texto_destino = f"✅ DESTINO: {dados_loja[col_nome_loja]} (Loja com Agente)"
+    else:
+        cor_pino_destino = "blue"
+        texto_destino = f"🏢 DESTINO: {dados_loja[col_nome_loja]} (Apenas Loja)"
+
+    # Pin da Loja de Destino
     folium.Marker(
         location=[coord_loja[0], coord_loja[1]],
-        tooltip=f"🏢 DESTINO: {dados_loja[col_nome_loja]}",
-        icon=folium.Icon(color="blue", icon="star")
+        tooltip=texto_destino,
+        icon=folium.Icon(color=cor_pino_destino, icon="star")
     ).add_to(m)
 
     if not agentes_proximos.empty:
