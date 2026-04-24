@@ -5,6 +5,7 @@ from streamlit_folium import st_folium
 from geopy.distance import geodesic
 import requests
 import unicodedata
+import json
 
 st.set_page_config(page_title="Realocação de Agentes", layout="wide")
 st.title("🔄 Realocação Inteligente de Agentes")
