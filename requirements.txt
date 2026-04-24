@@ -5,3 +5,5 @@ geopy
 streamlit-folium
 folium
 openpyxl
+geopandas
+unicodedata
