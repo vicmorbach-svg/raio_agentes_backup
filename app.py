@@ -54,6 +54,12 @@ def load_data():
 
 df_lojas = load_data()
 
+# Inicializa a memória do aplicativo (Session State)
+if 'cidade_selecionada' not in st.session_state:
+    st.session_state.cidade_selecionada = "🗺️ VISÃO GERAL (TODAS AS LOJAS)"
+if 'loja_selecionada' not in st.session_state:
+    st.session_state.loja_selecionada = None
+
 # ==========================================
 # 2. INTERFACE DE SELEÇÃO
 # ==========================================
@@ -61,49 +67,80 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     cidades_disponiveis = ["🗺️ VISÃO GERAL (TODAS AS LOJAS)"] + sorted(df_lojas['CIDADE'].unique())
-    cidade_selecionada = st.selectbox("1️⃣ Cidade da Loja de Destino:", cidades_disponiveis)
+
+    # Descobre a posição da cidade salva na memória
+    index_cidade = cidades_disponiveis.index(st.session_state.cidade_selecionada) if st.session_state.cidade_selecionada in cidades_disponiveis else 0
+
+    cidade_selecionada = st.selectbox("1️⃣ Escolha a Cidade:", cidades_disponiveis, index=index_cidade)
+
+    # Se o usuário mudar a cidade manualmente, atualiza a memória e recarrega
+    if cidade_selecionada != st.session_state.cidade_selecionada:
+        st.session_state.cidade_selecionada = cidade_selecionada
+        st.session_state.loja_selecionada = None
+        st.rerun()
 
 # ==========================================
-# LÓGICA 1: VISÃO GERAL DO ESTADO
+# LÓGICA 1: VISÃO GERAL DO ESTADO (FOLIUM)
 # ==========================================
-if cidade_selecionada == "🗺️ VISÃO GERAL (TODAS AS LOJAS)":
-    st.info("📍 Mostrando todas as localizações. Lojas em azul, Agentes disponíveis em verde.")
+if st.session_state.cidade_selecionada == "🗺️ VISÃO GERAL (TODAS AS LOJAS)":
+    st.info("📍 Clique em qualquer marcador azul no mapa para ir direto para a análise de raio daquela loja.")
 
-    col_nome_loja = 'ENDERECO' if 'ENDERECO' in df_lojas.columns else df_lojas.columns[0]
+    df_todas_lojas = df_lojas.dropna(subset=['LATITUDE', 'LONGITUDE']).copy()
+    col_nome_loja = 'ENDERECO' if 'ENDERECO' in df_todas_lojas.columns else df_todas_lojas.columns[0]
+
     m = folium.Map(location=[-30.0, -53.5], zoom_start=6, tiles="OpenStreetMap")
 
-    for idx, row in df_lojas.iterrows():
-        disponivel = str(row['AGENTE_DISPONIVEL']).strip().upper() == 'SIM'
-
-        if disponivel:
-            cor = "green"
-            icone = "user"
-            texto_tooltip = f"Agente Disponível: {row['NOME_AGENTE']} ({row['CIDADE']})"
-        else:
-            cor = "blue"
-            icone = "info-sign"
-            texto_tooltip = f"Loja: {row[col_nome_loja]}"
-
+    for idx, row in df_todas_lojas.iterrows():
         folium.Marker(
             location=[row['LATITUDE'], row['LONGITUDE']],
-            tooltip=texto_tooltip,
-            icon=folium.Icon(color=cor, icon=icone)
+            tooltip=f"Loja: {row[col_nome_loja]} (Clique para analisar)",
+            icon=folium.Icon(color="blue", icon="info-sign")
         ).add_to(m)
 
-    st_folium(m, use_container_width=True, height=600, returned_objects=[])
+    # 🚨 CAPTURA O CLIQUE NO MAPA
+    mapa_geral = st_folium(m, use_container_width=True, height=600, returned_objects=["last_object_clicked"])
+
+    # Se houver um clique válido em um marcador
+    if mapa_geral and mapa_geral.get("last_object_clicked"):
+        lat_clicada = mapa_geral["last_object_clicked"]["lat"]
+        lng_clicada = mapa_geral["last_object_clicked"]["lng"]
+
+        # Arredonda as coordenadas para garantir que encontre a loja exata no Excel
+        df_todas_lojas['LAT_ROUND'] = df_todas_lojas['LATITUDE'].round(4)
+        df_todas_lojas['LNG_ROUND'] = df_todas_lojas['LONGITUDE'].round(4)
+
+        loja_clicada = df_todas_lojas[
+            (df_todas_lojas['LAT_ROUND'] == round(lat_clicada, 4)) & 
+            (df_todas_lojas['LNG_ROUND'] == round(lng_clicada, 4))
+        ]
+
+        if not loja_clicada.empty:
+            # Salva a cidade e a loja na memória e recarrega a página automaticamente
+            st.session_state.cidade_selecionada = loja_clicada.iloc[0]['CIDADE']
+            st.session_state.loja_selecionada = loja_clicada.iloc[0][col_nome_loja]
+            st.rerun()
 
 # ==========================================
-# LÓGICA 2: BUSCA DE AGENTES POR RAIO
+# LÓGICA 2: ANÁLISE DE RAIO (FOLIUM)
 # ==========================================
 else:
     with col2:
-        lojas_da_cidade = df_lojas[df_lojas['CIDADE'] == cidade_selecionada]
+        lojas_da_cidade = df_lojas[df_lojas['CIDADE'] == st.session_state.cidade_selecionada]
         col_nome_loja = 'ENDERECO' if 'ENDERECO' in lojas_da_cidade.columns else lojas_da_cidade.columns[0]
-        loja_selecionada = st.selectbox("2️⃣ Loja que precisa de ajuda:", lojas_da_cidade[col_nome_loja].tolist())
+        lista_lojas = lojas_da_cidade[col_nome_loja].tolist()
+
+        # Verifica se a loja veio da memória (do clique no mapa)
+        index_loja = 0
+        if st.session_state.loja_selecionada in lista_lojas:
+            index_loja = lista_lojas.index(st.session_state.loja_selecionada)
+
+        loja_selecionada = st.selectbox("2️⃣ Escolha a sua Loja:", lista_lojas, index=index_loja)
+        st.session_state.loja_selecionada = loja_selecionada
 
     with col3:
-        # Aumentei o raio máximo para 50km para pegar cidades vizinhas
-        raio_km = st.slider("3️⃣ Raio de Busca (em KM):", min_value=1.0, max_value=50.0, value=10.0, step=1.0)
+        # Aumentei o limite do raio para 50km caso queira buscar agentes em cidades vizinhas
+        raio_km = st.slider("3️⃣ Defina o Raio de Busca (em KM):", min_value=0.5, max_value=50.0, value=10.0, step=0.5)
+
 
     # Pega as coordenadas da loja selecionada
     dados_loja = lojas_da_cidade[lojas_da_cidade[col_nome_loja] == loja_selecionada].iloc[0]
