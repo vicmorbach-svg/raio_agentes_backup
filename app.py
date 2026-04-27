@@ -147,7 +147,14 @@ if st.session_state.cidade_selecionada == "🗺️ VISÃO GERAL (TODAS AS LOJAS)
             tooltip=texto_tooltip,
             icon=folium.Icon(color=cor_pino, icon=icone_pino)
         ).add_to(m)
-
+    # --- LEGENDA DO MAPA ---
+    st.markdown("""
+        <div style="background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 10px; border-radius: 5px; margin-bottom: 10px; display: flex; justify-content: space-around; font-size: 14px;">
+            <span><b style="color: #2b7bba;">🔵 Azul:</b> Loja</span>
+            <span><b style="color: #28a745;">🟢 Verde:</b> Loja + Agente Backup</span>
+            <span><b style="color: #fd7e14;">🟠 Laranja:</b> Agente Backup</span>
+        </div>
+    """, unsafe_allow_html=True)
     mapa_geral = st_folium(m, use_container_width=True, height=600, returned_objects=["last_object_clicked"])
 
     # Captura clique no mapa
@@ -252,6 +259,14 @@ else:
                 icon=folium.Icon(color=cor_pino, icon="user")
             ).add_to(m)
 
+    # --- LEGENDA DO MAPA ---
+    st.markdown("""
+        <div style="background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 10px; border-radius: 5px; margin-bottom: 10px; display: flex; justify-content: space-around; font-size: 14px;">
+            <span><b style="color: #2b7bba;">🔵 Azul:</b> Loja</span>
+            <span><b style="color: #28a745;">🟢 Verde:</b> Loja + Agente Backup</span>
+            <span><b style="color: #fd7e14;">🟠 Laranja:</b> Agente Backup</span>
+        </div>
+    """, unsafe_allow_html=True)
     st_folium(m, use_container_width=True, height=600, returned_objects=[])
 
     # Tabela
