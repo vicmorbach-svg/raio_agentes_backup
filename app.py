@@ -149,10 +149,14 @@ if st.session_state.cidade_selecionada == "🗺️ VISÃO GERAL (TODAS AS LOJAS)
         ).add_to(m)
     # --- LEGENDA DO MAPA ---
     with st.container(border=True):
-        leg1, leg2, leg3 = st.columns(3)
-        leg1.markdown("🔵 **Azul:** Loja")
-        leg2.markdown("🟢 **Verde:** Loja + Agente Backup")
-        leg3.markdown("🟠 **Laranja:** Agente Backup")
+        st.markdown("""
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+            <div style="display: flex; justify-content: space-around; font-size: 15px;">
+                <span><i class="fa-solid fa-circle-info" style="color: #38Aadd; font-size: 18px;"></i> <b>Loja</b> (Azul)</span>
+                <span><i class="fa-solid fa-star" style="color: #72b026; font-size: 18px;"></i> <b>Loja + Agente</b> (Verde)</span>
+                <span><i class="fa-solid fa-user" style="color: #f69730; font-size: 18px;"></i> <b>Agente Backup</b> (Laranja)</span>
+            </div>
+        """, unsafe_allow_html=True)
     
     mapa_geral = st_folium(m, use_container_width=True, height=600, returned_objects=["last_object_clicked"])
 
@@ -260,10 +264,14 @@ else:
 
     # --- LEGENDA DO MAPA ---
     with st.container(border=True):
-        leg1, leg2, leg3 = st.columns(3)
-        leg1.markdown("🔵 **Azul:** Loja")
-        leg2.markdown("🟢 **Verde:** Loja + Agente Backup")
-        leg3.markdown("🟠 **Laranja:** Agente Backup")
+        st.markdown("""
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+            <div style="display: flex; justify-content: space-around; font-size: 15px;">
+                <span><i class="fa-solid fa-circle-info" style="color: #38Aadd; font-size: 18px;"></i> <b>Loja</b> (Azul)</span>
+                <span><i class="fa-solid fa-star" style="color: #72b026; font-size: 18px;"></i> <b>Loja + Agente</b> (Verde)</span>
+                <span><i class="fa-solid fa-user" style="color: #f69730; font-size: 18px;"></i> <b>Agente Backup</b> (Laranja)</span>
+            </div>
+        """, unsafe_allow_html=True)
     st_folium(m, use_container_width=True, height=600, returned_objects=[])
 
     # Tabela
