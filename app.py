@@ -148,7 +148,7 @@ if st.session_state.cidade_selecionada == "🗺️ VISÃO GERAL (TODAS AS LOJAS)
             icon=folium.Icon(color=cor_pino, icon=icone_pino)
         ).add_to(m)
     # --- LEGENDA DO MAPA ---
-    with st.container(border=true):
+    with st.container(border=True):
         leg1, leg2, leg3 = st.columns(3)
         leg1.markdown("🔵 **Azul:** Loja")
         leg2.markdown("🟢 **Verde:** Loja + Agente Backup")
@@ -259,7 +259,7 @@ else:
             ).add_to(m)
 
     # --- LEGENDA DO MAPA ---
-    with st.container(border=true):
+    with st.container(border=True):
         leg1, leg2, leg3 = st.columns(3)
         leg1.markdown("🔵 **Azul:** Loja")
         leg2.markdown("🟢 **Verde:** Loja + Agente Backup")
