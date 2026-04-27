@@ -152,9 +152,9 @@ if st.session_state.cidade_selecionada == "🗺️ VISÃO GERAL (TODAS AS LOJAS)
         st.markdown("""
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
             <div style="display: flex; justify-content: space-around; font-size: 15px;">
-                <span><i class="fa-solid fa-circle-info" style="color: #38Aadd; font-size: 18px;"></i> <b>Loja</b> (Azul)</span>
-                <span><i class="fa-solid fa-star" style="color: #72b026; font-size: 18px;"></i> <b>Loja + Agente</b> (Verde)</span>
-                <span><i class="fa-solid fa-user" style="color: #f69730; font-size: 18px;"></i> <b>Agente Backup</b> (Laranja)</span>
+                <span><i class="fa-solid fa-circle-info" style="color: #38Aadd; font-size: 18px;"></i> <b>Loja</b></span>
+                <span><i class="fa-solid fa-star" style="color: #72b026; font-size: 18px;"></i> <b>Loja + Agente</b></span>
+                <span><i class="fa-solid fa-user" style="color: #f69730; font-size: 18px;"></i> <b>Agente Backup</b></span>
             </div>
         """, unsafe_allow_html=True)
     
@@ -267,9 +267,9 @@ else:
         st.markdown("""
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
             <div style="display: flex; justify-content: space-around; font-size: 15px;">
-                <span><i class="fa-solid fa-circle-info" style="color: #38Aadd; font-size: 18px;"></i> <b>Loja</b> (Azul)</span>
-                <span><i class="fa-solid fa-star" style="color: #72b026; font-size: 18px;"></i> <b>Loja + Agente</b> (Verde)</span>
-                <span><i class="fa-solid fa-user" style="color: #f69730; font-size: 18px;"></i> <b>Agente Backup</b> (Laranja)</span>
+                <span><i class="fa-solid fa-circle-info" style="color: #38Aadd; font-size: 18px;"></i> <b>Loja</b></span>
+                <span><i class="fa-solid fa-star" style="color: #72b026; font-size: 18px;"></i> <b>Loja + Agente</b></span>
+                <span><i class="fa-solid fa-user" style="color: #f69730; font-size: 18px;"></i> <b>Agente Backup</b></span>
             </div>
         """, unsafe_allow_html=True)
     st_folium(m, use_container_width=True, height=600, returned_objects=[])
